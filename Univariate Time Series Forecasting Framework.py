@@ -96,7 +96,7 @@ class GRUWithLightAttentionAndTrend(nn.Module):
             input_size=input_dim,
             hidden_size=hidden_dim,
             num_layers=num_layers,
-            batch_first=True
+            batch_first=True,
             dropout=dropout_rate if num_layers>1 else 0
         )
         self.self_attention=LightweightSelfAttention(hidden_dim)
@@ -143,11 +143,11 @@ def fetch_and_clean_data():
         ("2025-01-01","2025-12-31"),
         ("2026-01-01","2026-01-15")
     ]
-    for batch_start,batch_end in date_ranges:
-        print("Fetching time period:{batch_start} to {batch_end}")
+    for batch_start,batch_end in data_ranges:
+        print(f"Fetching time period:{batch_start} to {batch_end}")
         params={
             "datasetid":"GHCND",
-            "stationid":STATIOIN_ID,
+            "stationid":STATION_ID,
             "datatypeid":"TMAX",
             "startdate":batch_start,
             "enddate":batch_end,
@@ -231,7 +231,7 @@ def build_sequences(df):
     df["Date"]=pd.to_datetime(df["Date"])
     df_history=df[(df["Date"]>="2023-01-01")&(df["Date"]<="2025-12-31")].copy()
     df_final_verify=df[(df["Date"]>="2026-01-01")&(df["Date"]<="2026-01-15")].copy()
-    history_temp=df_histore["Daily Maximum Temperature(℃)"].values.astype(np.float32)
+    history_temp=df_history["Daily Maximum Temperature(℃)"].values.astype(np.float32)
     final_verify_temp=df_final_verify["Daily Maximum Temperature(℃)"].values.astype(np.float32)
 
     #First-order difference
@@ -249,7 +249,7 @@ def build_sequences(df):
         max_start_idx=len(data)-SEQ_LEN-PRED_LEN
         for start_idx in range(max_start_idx+1):
             input_seq=data[start_idx:start_idx+SEQ_LEN]
-            target_seq=data[start_idx+SEQ+LEN:start_idx+SEQ_LEN+PRED_LEN]
+            target_seq=data[start_idx+SEQ_LEN:start_idx+SEQ_LEN+PRED_LEN]
             X.append(input_seq)
             y.append(target_seq)
         return np.array(X,dtype=np.float32),np.array(y,dtype=np.float32)
@@ -272,7 +272,7 @@ def build_sequences(df):
     print(f"Test set sample count:{len(X_test)},Input shape:{X_test.shape},Label shape:{y_test.shape}")
     print(f"Sample has been saved as:{SEQ_NPZ}")
     print("="*80+"\n")
-    return (X_train,y_train,X_test,y_test,train_mean,train_std,history_temp
+    return (X_train,y_train,X_test,y_test,train_mean,train_std,history_temp,
             diff_history,final_verify_temp)
 
 #Module 3:Genetic Algorithm Hyperparameter Optimization
@@ -355,7 +355,7 @@ def genetic_algorithm_optimization(X_train,y_train):
         return population[best_idx]
 
     def crossover(parent1,parent2):
-        child2,child2=parent1.copy(),parent2.copy()
+        child1,child2=parent1.copy(),parent2.copy()
         for param_name,(param_range,param_type) in HYPERPARAM_SPACE.items():
             if random.random()<0.55:
                 if param_type=="discrete":
@@ -399,7 +399,7 @@ def genetic_algorithm_optimization(X_train,y_train):
         current_best_individual=population[current_best_idx]
 
         best_fitness_history.append(current_best_fitness)
-        best_loss_hostory.append(current_best_loss)
+        best_loss_history.append(current_best_loss)
         best_individual_history.append(current_best_individual)
 
         print(f"Generation {generation+1} completed|Current optimal LOSS:{current_best_loss:.4f}")
@@ -423,7 +423,7 @@ def genetic_algorithm_optimization(X_train,y_train):
                 next_generation.append(child2)
         population=next_generation
 
-    global_bext_idx=np.argmax(best_fitness_history)
+    global_best_idx=np.argmax(best_fitness_history)
     global_best_loss=best_loss_history[global_best_idx]
     global_best_individual=best_individual_history[global_best_idx]
 
@@ -465,7 +465,7 @@ def train_and_evaluate_model(X_train,y_train,X_test,y_test,train_mean,train_std,
     train_dataset=torch.utils.data.TensorDataset(X_train_tensor,y_train_tensor)
     train_loader=torch.utils.data.DataLoader(train_dataset,batch_size=batch_size,shuffle=False)
 
-    model=GRUWithLoghtAttentionAndTrend(
+    model=GRUWithLightAttentionAndTrend(
         hidden_dim=best_hp["hidden_dim"],
         num_layers=best_hp["num_layers"],
         dropout_rate=best_hp["dropout_rate"]
@@ -502,7 +502,7 @@ def train_and_evaluate_model(X_train,y_train,X_test,y_test,train_mean,train_std,
     test_pred_diff=test_pred.cpu().numpy()*train_std+train_mean
     y_test_diff=y_test_tensor.cpu().numpy()*train_std+train_mean
 
-    mse=np.mean((test_pred_diff-y_test_diff.flatten())
+    mse=np.mean((test_pred_diff-y_test_diff.flatten())**2)
     rmse=np.sqrt(mse)
     r2=r2_score(y_test_diff.flatten(),test_pred_diff.flatten())
 
@@ -556,7 +556,7 @@ def final_prediction(model,history_temp,diff_history,final_verify_temp,train_mea
         pred_temps.append(pred_temps[-1]+pred_diff[i])
     pred_real=np.array(pred_temps)
 
-    pred_datas=pd.date_range(start="2026-01-01",end="2026-01-15").date
+    pred_dates=pd.date_range(start="2026-01-01",end="2026-01-15").date
     result_df=pd.DataFrame({
         "Date":pred_dates,
         "Predicted temperature(℃)":np.round(pred_real,2),
