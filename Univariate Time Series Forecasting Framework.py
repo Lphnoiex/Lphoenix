@@ -206,7 +206,7 @@ def fetch_and_clean_data():
 
     total_bad=bad_data_mask.sum()
     if total_bad>0:
-        print(f"Found {total_bad} bad data points(missing/anomalous value),which hanve been filled")
+        print(f"Found {total_bad} bad data points(missing/anomalous value),which have been filled")
     df_clean=df_clean.sort_values("Date").reset_index(drop=True)
     df_clean.to_csv(OUTPUT_CSV,index=False,encoding="utf-8-sig")
 
@@ -238,7 +238,7 @@ def build_sequences(df):
     diff_history=np.diff(history_temp)  #length=len(history_temp)-1
     train_diff=diff_history[:TRAIN_RATIO]
     test_diff=diff_history[TRAIN_RATIO:]
-    #Stardardization
+    #Standardization
     train_mean=np.mean(train_diff)
     train_std=np.std(train_diff)
     train_norm=(train_diff-train_mean)/train_std
@@ -416,8 +416,8 @@ def genetic_algorithm_optimization(X_train,y_train):
                 child1,child2=crossover(parent1,parent2)
             else:
                 child1,child2=parent1.copy(),parent2.copy()
-            child=mutation(child1)
-            child=mutation(child2)
+            child1=mutation(child1)
+            child2=mutation(child2)
             next_generation.append(child1)
             if len(next_generation)<POPULATION_SIZE:
                 next_generation.append(child2)
@@ -596,7 +596,7 @@ if __name__=="__main__":
     try:
         #Step 1:Data Acquisition and Cleaning
         df_data=fetch_and_clean_data()
-        #Step 2:Construct ifferential Sample
+        #Step 2:Construct Differential Sample
         (X_train,y_train,X_test,y_test,
          train_mean,train_std,history_temp,diff_history,final_verify_temp)=build_sequences(df_data)
         #Step 3:Genetic Algorithm Hyperparameter Optimization
